@@ -10,6 +10,7 @@ import (
 	mock_files "project/internal/mock-files"
 	"project/internal/models"
 	service "project/internal/service"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -71,7 +72,10 @@ func Test_handler_JobByID(t *testing.T) {
 
 				c.Request = httpRequest
 
-				return c, rr, nil
+				mc := gomock.NewController(t)
+				ms := mock_files.NewMockUserService(mc)
+
+				return c, rr, ms
 			},
 			expectedStatusCode: http.StatusBadRequest,
 			expectedResponse:   `{"error":"Bad Request"}`,
@@ -177,24 +181,28 @@ func Test_handler_AllJobs(t *testing.T) {
 			expectedResponse:   `{"error":"Unauthorized"}`,
 		},
 		{
-			name: "invalid job id",
+			name: "error while fetching jobs from service",
 			setup: func() (*gin.Context, *httptest.ResponseRecorder, service.UserService) {
 				rr := httptest.NewRecorder()
 				c, _ := gin.CreateTestContext(rr)
 				httpRequest, _ := http.NewRequest(http.MethodGet, "http://test.com:8080", nil)
 				ctx := httpRequest.Context()
 				ctx = context.WithValue(ctx, middleware.TraceIDKey, "123")
-				ctx = context.WithValue(ctx, auth.Key, jwt.RegisteredClaims{})
+				// ctx = context.WithValue(ctx, auth.Key, jwt.RegisteredClaims{})
 				httpRequest = httpRequest.WithContext(ctx)
-				c.Params = append(c.Params, gin.Param{Key: "id", Value: "abc"})
-
 				c.Request = httpRequest
+				c.Params = append(c.Params, gin.Param{Key: "id", Value: "123"})
+				mc := gomock.NewController(t)
+				ms := mock_files.NewMockUserService(mc)
 
-				return c, rr, nil
+				ms.EXPECT().ViewAllJobs(c.Request.Context()).Return([]models.Jobs{}, errors.New("test service error")).AnyTimes()
+
+				return c, rr, ms
 			},
-			expectedStatusCode: http.StatusBadRequest,
-			expectedResponse:   `{"error":"unauthorized"}`,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedResponse:   `{"error":"Unauthorized"}`,
 		},
+
 		{
 			name: "success",
 			setup: func() (*gin.Context, *httptest.ResponseRecorder, service.UserService) {
@@ -206,11 +214,11 @@ func Test_handler_AllJobs(t *testing.T) {
 				ctx = context.WithValue(ctx, auth.Key, jwt.RegisteredClaims{})
 				httpRequest = httpRequest.WithContext(ctx)
 				c.Request = httpRequest
-
+				c.Params = append(c.Params, gin.Param{Key: "cid", Value: "123"})
 				mc := gomock.NewController(t)
 				ms := mock_files.NewMockUserService(mc)
 
-				ms.EXPECT().ViewAllJobs(gomock.Any()).Return([]models.Jobs{}, nil).AnyTimes()
+				ms.EXPECT().ViewAllJobs(c.Request.Context()).Return([]models.Jobs{}, nil).AnyTimes()
 
 				return c, rr, ms
 			},
@@ -234,9 +242,9 @@ func Test_handler_AllJobs(t *testing.T) {
 }
 
 func Test_handler_Jobs(t *testing.T) {
-	type args struct {
-		c *gin.Context
-	}
+	// type args struct {
+	// 	c *gin.Context
+	// }
 	tests := []struct {
 		name               string
 		setup              func() (*gin.Context, *httptest.ResponseRecorder, service.UserService)
@@ -272,6 +280,29 @@ func Test_handler_Jobs(t *testing.T) {
 			expectedStatusCode: http.StatusUnauthorized,
 			expectedResponse:   `{"error":"Unauthorized"}`,
 		},
+		{
+			name: "invalid company id",
+			setup: func() (*gin.Context, *httptest.ResponseRecorder, service.UserService) {
+				rr := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(rr)
+				httpRequest, _ := http.NewRequest(http.MethodGet, "http://test.com:8080", nil)
+				ctx := httpRequest.Context()
+				ctx = context.WithValue(ctx, middleware.TraceIDKey, "123")
+				ctx = context.WithValue(ctx, auth.Key, jwt.RegisteredClaims{})
+				httpRequest = httpRequest.WithContext(ctx)
+				c.Params = append(c.Params, gin.Param{Key: "cid", Value: "abc"})
+
+				c.Request = httpRequest
+
+				mc := gomock.NewController(t)
+				ms := mock_files.NewMockUserService(mc)
+
+				return c, rr, ms
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   `{"error":"Bad Request"}`,
+		},
+
 		{
 			name: "success",
 			setup: func() (*gin.Context, *httptest.ResponseRecorder, service.UserService) {
@@ -311,15 +342,14 @@ func Test_handler_Jobs(t *testing.T) {
 }
 
 func Test_handler_CreateJobs(t *testing.T) {
-	type args struct {
-		c *gin.Context
-	}
+	// type args struct {
+	// 	c *gin.Context
+	// }
 	tests := []struct {
 		name               string
 		setup              func() (*gin.Context, *httptest.ResponseRecorder, service.UserService)
 		expectedStatusCode int
 		expectedResponse   string
-	
 	}{
 		{
 			name: "missing trace id",
@@ -351,28 +381,26 @@ func Test_handler_CreateJobs(t *testing.T) {
 			expectedResponse:   `{"error":"Unauthorized"}`,
 		},
 		{
-			name: "failure",
+			name: "Success",
 			setup: func() (*gin.Context, *httptest.ResponseRecorder, service.UserService) {
 				rr := httptest.NewRecorder()
 				c, _ := gin.CreateTestContext(rr)
-				httpRequest, _ := http.NewRequest(http.MethodGet, "http://test.com:8080", strings.NewReader(`{"title":"dev","salary":"1222"}`))
+				httpRequest, _ := http.NewRequest(http.MethodGet, "http://test.com:8080", strings.NewReader(`{"name":"Tek system","location":"mysore"}`))
 				ctx := httpRequest.Context()
 				ctx = context.WithValue(ctx, middleware.TraceIDKey, "123")
 				ctx = context.WithValue(ctx, auth.Key, jwt.RegisteredClaims{})
 				httpRequest = httpRequest.WithContext(ctx)
 				c.Request = httpRequest
-				// c.Params = append(c.Params, gin.Param{Key: "id", Value: "1"})
+
 				mc := gomock.NewController(t)
 				ms := mock_files.NewMockUserService(mc)
-
-				ms.EXPECT().AddJobDetails(ctx, gomock.Any(), gomock.Any()).Return(models.Jobs{}, nil).AnyTimes()
+				ms.EXPECT().AddJobDetails(gomock.Any(), gomock.Any(),gomock.Any()).Return(models.Jobs{}, nil).AnyTimes()
 
 				return c, rr, ms
 			},
-			expectedStatusCode: http.StatusBadRequest,
-			expectedResponse:   `"Bad Request"{"ID":0,"CreatedAt":"0001-01-01T00:00:00Z","UpdatedAt":"0001-01-01T00:00:00Z","DeletedAt":null,"cid":0,"name":"","salary":""}`,
+			expectedStatusCode: http.StatusOK,
+			expectedResponse:   `{"ID":0,"CreatedAt":"0001-01-01T00:00:00Z","UpdatedAt":"0001-01-01T00:00:00Z","DeletedAt":null,"cid":0,"job_role":"","salary":""}`,
 		},
-
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

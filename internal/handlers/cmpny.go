@@ -35,7 +35,8 @@ func (h *handler) ViewCompany(c *gin.Context) {
 
 	cid, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error":http.StatusText(http.StatusBadRequest)})
+		return
 	}
 
 	companyData, err := h.service.ViewCompanyDetails(ctx, cid)
